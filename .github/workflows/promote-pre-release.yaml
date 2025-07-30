@@ -75,6 +75,9 @@ jobs:
           echo "Successfully promoted $RELEASE_TAG from pre-release to release"
 
       - name: Trigger deploy production workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
         run: |
           echo "Triggering deploy production workflow for release: $RELEASE_TAG"
           
