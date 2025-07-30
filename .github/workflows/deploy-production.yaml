@@ -1,0 +1,19 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to deploy'
+        required: true
+        type: string
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dummy Deploy
+        run: |
+          echo "This is a dummy deploy-production job triggered by promote-release."
+          echo "release_tag: ${{ github.event.inputs.release_tag }}"
+

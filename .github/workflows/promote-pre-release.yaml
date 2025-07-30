@@ -27,37 +27,72 @@ jobs:
           fi
           gh --version
 
+      - name: Check if release is a pre-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          echo "Checking if release is a pre-release: $RELEASE_TAG"
+
+          # Get the release details for the specified tag
+          RELEASE_INFO=$(gh api repos/${{ github.repository }}/releases/tags/$RELEASE_TAG)
+
+          if [ -z "$RELEASE_INFO" ]; then
+            echo "Error: Release with tag $RELEASE_TAG not found"
+            exit 1
+          fi
+
+          # Check if it's a pre-release
+          IS_PRERELEASE=$(echo "$RELEASE_INFO" | jq -r '.prerelease')
+          
+          if [ "$IS_PRERELEASE" != "true" ]; then
+            echo "Error: Release $RELEASE_TAG is not a pre-release (prerelease=$IS_PRERELEASE)"
+            echo "This workflow is designed to promote pre-releases only. Please check the release tag."
+            exit 1
+          fi
+
+          echo "✅ Confirmed $RELEASE_TAG is a pre-release"
+
       - name: Promote pre-release to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.inputs.release_tag }}
         run: |
           echo "Promoting release: $RELEASE_TAG"
-          
+
           # Get the release ID for the specified tag
           RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/$RELEASE_TAG --jq '.id')
-          
-          if [ -z "$RELEASE_ID" ]; then
-            echo "Error: Release with tag $RELEASE_TAG not found"
-            exit 1
-          fi
-          
+
           echo "Found release ID: $RELEASE_ID"
-          
+
           # Update the release to remove pre-release flag
           gh api repos/${{ github.repository }}/releases/$RELEASE_ID \
             --method PATCH \
             --field prerelease=false \
             --field draft=false \
             --field make_latest=true
-          
+
           echo "Successfully promoted $RELEASE_TAG from pre-release to release"
+
+      - name: Trigger deploy production workflow
+        run: |
+          echo "Triggering deploy production workflow for release: $RELEASE_TAG"
           
+          # Trigger the deploy production workflow using workflow_dispatch
+          gh workflow run deploy-production.yaml \
+            --ref $RELEASE_TAG \
+            --field release_tag=$RELEASE_TAG
+          
+          echo "Successfully triggered deploy production workflow"
+
       - name: Create summary
         run: |
           echo "## Release Promotion Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Pre-release validation passed**" >> $GITHUB_STEP_SUMMARY
           echo "✅ **Successfully promoted release:** \`${{ github.event.inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Deploy production workflow triggered**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Promoted by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
